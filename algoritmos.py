@@ -1,123 +1,124 @@
-import math
-import sys
-
-# Para evitar límites de recursión en arreglos grandes
-sys.setrecursionlimit(2000000)
+"""Algoritmos de selección. k es 1-indexado; comparaciones = comparaciones reales entre valores."""
+from functools import cmp_to_key
+import random
 
 
-# 1. Selección por ordenamiento completo
+def _validar(arr, k):
+    if not 1 <= k <= len(arr):
+        raise ValueError(f"k={k} fuera de rango para n={len(arr)}")
+
+
 def seleccion_ordenamiento(arr, k):
+    """Ordenamiento completo TimSort O(n log n) peor caso; comparaciones observadas."""
+    _validar(arr, k)
+    comparaciones = 0
+
+    def comparar(a, b):
+        nonlocal comparaciones
+        comparaciones += 1
+        return (a > b) - (a < b)
+
+    ordenados = sorted(arr, key=cmp_to_key(comparar))
+    return ordenados[k - 1], comparaciones
+
+
+def quickselect(arr, k, estrategia_pivote="aleatorio", semilla=42):
+    """Quickselect iterativo con partición de Hoare.
+
+    'aleatorio' (predeterminado): O(n) esperado para entradas arbitrarias.
+    'primero': permite examinar el peor caso O(n²) en entradas ordenadas pequeñas.
+    No se modifica el arreglo del llamador.
     """
-    Ordena una copia del arreglo y obtiene la posición k-1.
-    Complejidad: O(n log n)
-    """
+    _validar(arr, k)
+    if estrategia_pivote not in ("aleatorio", "primero"):
+        raise ValueError("estrategia_pivote debe ser 'aleatorio' o 'primero'")
     A = arr.copy()
-    n = len(A)
-    A.sort()
-    
-    # Estimación de comparaciones para sort() en Python (TimSort)
-    comparaciones = int(n * math.log2(n)) if n > 1 else 0
-    
-    return A[k - 1], comparaciones
+    rng = random.Random(semilla)
+    comparaciones = 0
+    low, high, objetivo = 0, len(A) - 1, k - 1
 
-
-
-# 2. QUICKSELECT 
-
-def quickselect(arr, k):
-    """
-    Algoritmo de Quickselect con partición de Hoare.
-    Complejidad: O(n) esperado, O(n^2) peor caso
-    """
-    A = arr.copy()
-    comparaciones = [0]
-    
-    def particion(low, high):
+    while low < high:
+        if estrategia_pivote == "aleatorio":
+            posicion = rng.randrange(low, high + 1)
+            A[low], A[posicion] = A[posicion], A[low]
         pivote = A[low]
-        i = low - 1
-        j = high + 1
+        i, j = low - 1, high + 1
         while True:
             i += 1
-            comparaciones[0] += 1
+            comparaciones += 1
             while A[i] < pivote:
                 i += 1
-                comparaciones[0] += 1
-                
+                comparaciones += 1
             j -= 1
-            comparaciones[0] += 1
+            comparaciones += 1
             while A[j] > pivote:
                 j -= 1
-                comparaciones[0] += 1
-                
+                comparaciones += 1
             if i >= j:
-                return j
+                corte = j
+                break
             A[i], A[j] = A[j], A[i]
 
-    def select(low, high, k_idx):
-        if low == high:
-            return A[low]
-        
-        pivote_idx = particion(low, high)
-        
-        if k_idx <= pivote_idx:
-            return select(low, pivote_idx, k_idx)
+        if objetivo <= corte:
+            high = corte
         else:
-            return select(pivote_idx + 1, high, k_idx)
+            low = corte + 1
 
-    res = select(0, len(A) - 1, k - 1)
-    return res, comparaciones[0]
-
+    return A[low], comparaciones
 
 
-# 3. Mediana de medianas
 def bfprt(arr, k):
-    """
-    Algoritmo Mediana de Medianas (BFPRT) agrupando de a 5 elementos.
-    Complejidad: O(n) garantizado en peor caso
-    """
-    A = arr.copy()
-    comparaciones = [0]
+    """Selección mediana de medianas en grupos de 5, O(n) en peor caso.
 
-    def select(sub_arr, k_idx):
-        n = len(sub_arr)
+    Cuenta todas las comparaciones de valores, tanto en inserción como en la
+    partición de tres vías; no usa estimaciones n log n.
+    """
+    _validar(arr, k)
+    comparaciones = 0
+
+    def ordenar_grupo(grupo):
+        nonlocal comparaciones
+        grupo = list(grupo)
+        for i in range(1, len(grupo)):
+            x = grupo[i]
+            j = i - 1
+            while j >= 0:
+                comparaciones += 1
+                if grupo[j] <= x:
+                    break
+                grupo[j + 1] = grupo[j]
+                j -= 1
+            grupo[j + 1] = x
+        return grupo
+
+    def seleccionar(valores, indice):
+        nonlocal comparaciones
+        n = len(valores)
         if n <= 5:
-            sub_arr.sort()
-            comparaciones[0] += int(n * math.log2(n)) if n > 1 else 0
-            return sub_arr[k_idx]
+            return ordenar_grupo(valores)[indice]
 
-        # 1. Dividir en grupos de 5 y obtener medianas
-        grupos = [sub_arr[i:i + 5] for i in range(0, n, 5)]
         medianas = []
-        for grupo in grupos:
-            grupo.sort()
-            m_len = len(grupo)
-            comparaciones[0] += int(m_len * math.log2(m_len)) if m_len > 1 else 0
-            medianas.append(grupo[m_len // 2])
+        for pos in range(0, n, 5):
+            grupo = ordenar_grupo(valores[pos:pos + 5])
+            medianas.append(grupo[len(grupo) // 2])
+        pivote = seleccionar(medianas, len(medianas) // 2)
 
-        # 2. Encontrar la mediana de las medianas de forma recursiva
-        pivote = select(medianas, len(medianas) // 2)
-
-        # 3. Particionar el arreglo en base al pivote obtenido
-        menores = []
-        iguales = []
-        mayores = []
-        
-        for elem in sub_arr:
-            comparaciones[0] += 1
-            if elem < pivote:
-                menores.append(elem)
-            elif elem == pivote:
-                iguales.append(elem)
+        menores, mayores = [], []
+        iguales = 0
+        for valor in valores:
+            comparaciones += 1
+            if valor < pivote:
+                menores.append(valor)
             else:
-                mayores.append(elem)
-
-        # 4. Decidir en qué subarreglo continuar
-        if k_idx < len(menores):
-            return select(menores, k_idx)
-        elif k_idx < len(menores) + len(iguales):
+                comparaciones += 1
+                if valor == pivote:
+                    iguales += 1
+                else:
+                    mayores.append(valor)
+        if indice < len(menores):
+            return seleccionar(menores, indice)
+        if indice < len(menores) + iguales:
             return pivote
-        else:
-            return select(mayores, k_idx - len(menores) - len(iguales))
+        return seleccionar(mayores, indice - len(menores) - iguales)
 
-    res = select(A, k - 1)
-    return res, comparaciones[0]
+    return seleccionar(arr.copy(), k - 1), comparaciones
