@@ -1,7 +1,8 @@
 # Tarea Práctica N° 1 – Evaluación del Rendimiento de Algoritmos de Selección
 
-**Asignatura:** Diseño y Análisis de Algoritmos · **Institución:** Universidad Católica del Norte  
-**Profesor:** Claudio Meneses V. · **Ayudante:** Gustavo Miles  
+**Asignatura:** Diseño y Análisis de Algoritmos · 
+**Profesor:** Claudio Meneses V. ·
+**Ayudante:** Gustavo Miles  
 **Integrantes:** Lucas Alcayaga y Lorena Ayala
 
 ## Objetivo
@@ -57,5 +58,4 @@ La opción principal con pivote aleatorio no tiene por qué mostrar un deterioro
 - `resumen_estadistico_AlcayagaLucas_AyalaLorena.csv`: se genera con `graficar.py`.
 - `resultados_originales/`: archivos CSV y PNG obtenidos con el código **anterior**; son **históricos y no válidos para comparar** con las mediciones corregidas. Deben reemplazarse al completar las nuevas pruebas.
 
-## Informe pendiente
-La rúbrica exige entregar además un PDF con portada, marco teórico, pseudocódigo de cada algoritmo, análisis de complejidades, metodología, hardware/software, tablas, gráficos, discusión por n/distribución/k, conclusiones y referencias. El informe **no se incluye** en este ZIP corregido.
+## Informe 
