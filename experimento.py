@@ -1,112 +1,123 @@
-import math
+"""Protocolo experimental reproducible para la tarea RA2."""
+import argparse
+import platform
+import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from algoritmos import bfprt, quickselect, seleccion_ordenamiento
 
-# datos de integrantes
-
 INTEGRANTES = "Lucas Alcayaga & Lorena Ayala"
-
-
-# Configuración del experimento
-
-# Nota: Si 10^6 tarda demasiado en tu equipo, se puede ajustar la cota según el hardware
-
 TAMANOS_N = [1000, 10000, 100000, 500000, 1000000]
 DISTRIBUCIONES = ["Aleatorio", "Ordenado Ascendente", "Ordenado Descendente", "Con Repetidos"]
 REPETICIONES = 10
+ARCHIVO_DATOS = "datos_experimentales_AlcayagaLucas_AyalaLorena.csv"
 
-def generar_datos(n, distribucion):
-    """Genera arreglos según la distribución requerida."""
-    rng = np.random.default_rng(42)  # Semilla fija para reproducibilidad
-    
+
+def generar_datos(n, distribucion, semilla):
+    rng = np.random.default_rng(semilla)
     if distribucion == "Aleatorio":
         return rng.integers(0, 10**8, size=n).tolist()
-    elif distribucion == "Ordenado Ascendente":
+    if distribucion == "Ordenado Ascendente":
         return list(range(n))
-    elif distribucion == "Ordenado Descendente":
+    if distribucion == "Ordenado Descendente":
         return list(range(n, 0, -1))
-    elif distribucion == "Con Repetidos":
-        # 10% de valores únicos para asegurar alto porcentaje de duplicados
+    if distribucion == "Con Repetidos":
         return rng.integers(0, max(2, n // 10), size=n).tolist()
-    else:
-        raise ValueError(f"Distribución no válida: {distribucion}")
+    raise ValueError(f"Distribución desconocida: {distribucion}")
 
 
 def obtener_ks(n):
-    """Devuelve las posiciones k requeridas: k=1, k=n/2, k=n."""
-    return {
-        "k=1": 1,
-        "k=n/2": max(1, n // 2),
-        "k=n": n
-    }
+    return {"k=1": 1, "k=n/2": max(1, n // 2), "k=n": n}
 
 
-def ejecutar_experimentos():
-    filas = []
-    id_ejecucion = 1
-    
-    total_combinaciones = len(TAMANOS_N) * len(DISTRIBUCIONES) * 3 * 3
-    print(f"Iniciando experimento ({INTEGRANTES})...")
-    print(f"Total combinaciones a evaluar: {total_combinaciones}")
-
+def ejecutar_experimentos(tamanos=None, repeticiones=REPETICIONES, salida=ARCHIVO_DATOS):
+    tamanos = TAMANOS_N if tamanos is None else tamanos
     algoritmos = [
         ("Selección Ordenamiento", seleccion_ordenamiento, "O(n log n)"),
         ("Quickselect", quickselect, "O(n) esperado / O(n^2) peor caso"),
-        ("BFPRT (Mediana de Medianas)", bfprt, "O(n) peor caso")
+        ("BFPRT (Mediana de Medianas)", bfprt, "O(n) peor caso"),
     ]
+    total = len(tamanos) * len(DISTRIBUCIONES) * 3 * len(algoritmos) * repeticiones
+    print(f"Iniciando: {INTEGRANTES}. Mediciones previstas: {total}", flush=True)
+    encabezados = ["id_ejecucion", "integrantes", "algoritmo", "n", "tipo_datos",
+                   "k_etiqueta", "k_valor", "repeticion", "semilla_datos", "tiempo_ms",
+                   "comparaciones", "orden_teorico", "validado", "estrategia_pivote"]
+    import csv
+    destino = Path(salida)
+    with destino.open("w", encoding="utf-8", newline="") as archivo:
+        escritor = csv.DictWriter(archivo, fieldnames=encabezados)
+        escritor.writeheader()
+        id_ejecucion = 1
+        for n in tamanos:
+            for dist in DISTRIBUCIONES:
+                print(f"n={n:,} | {dist}", flush=True)
+                for rep in range(1, repeticiones + 1):
+                    # Una semilla distinta por repetición. Todos los algoritmos y k
+                    # reciben exactamente el mismo conjunto de datos en ella.
+                    semilla = 20261112 + rep * 1000003 + n
+                    datos = generar_datos(n, dist, semilla)
+                    datos_ordenados = sorted(datos)  # fuera de las mediciones
+                    for k_nombre, k_val in obtener_ks(n).items():
+                        esperado = datos_ordenados[k_val - 1]
+                        for nombre, funcion, orden in algoritmos:
+                            # Tiempo incluye copia interna y conteo de comparaciones,
+                            # pero excluye creación de entrada y comprobación.
+                            inicio = time.perf_counter()
+                            obtenido, comps = funcion(datos, k_val)
+                            transcurrido = (time.perf_counter() - inicio) * 1000
+                            if obtenido != esperado:
+                                raise AssertionError(
+                                    f"ERROR {nombre} n={n} dist={dist} k={k_val} rep={rep}: "
+                                    f"obtenido={obtenido} esperado={esperado}"
+                                )
+                            escritor.writerow({
+                                "id_ejecucion": id_ejecucion, "integrantes": INTEGRANTES,
+                                "algoritmo": nombre, "n": n, "tipo_datos": dist,
+                                "k_etiqueta": k_nombre, "k_valor": k_val,
+                                "repeticion": rep, "semilla_datos": semilla,
+                                "tiempo_ms": transcurrido, "comparaciones": comps,
+                                "orden_teorico": orden, "validado": True,
+                                "estrategia_pivote": "aleatorio" if nombre == "Quickselect" else "no aplica"
+                            })
+                            id_ejecucion += 1
+                archivo.flush()
+    print(f"Experimento completado: {id_ejecucion-1}/{total} filas. {destino}")
+    print(f"Python {platform.python_version()} | {platform.platform()} | CPU: {platform.processor()}")
 
-    for n in TAMANOS_N:
-        ks = obtener_ks(n)
-        for dist in DISTRIBUCIONES:
-            print(f" -> Evaluando n={n}, Distribución={dist}...")
-            
-            # Generamos los datos base para que los 3 algoritmos reciban EXACTAMENTE los mismos datos
-            datos_base = generar_datos(n, dist)
-            
-            for k_nombre, k_val in ks.items():
-                for nombre_algo, funcion_algo, orden_teorico in algoritmos:
-                    
-                    # Para evitar desbordamientos de tiempo en peor caso conocido (Quickselect en ordenados)
-                    if nombre_algo == "Quickselect" and dist in ["Ordenado Ascendente", "Ordenado Descendente"] and n >= 100000:
-                        print(f"    [Omitido] {nombre_algo} en {dist} (n={n}) para evitar recursion excesiva / O(n^2).")
-                        continue
-                        
-                    for rep in range(1, REPETICIONES + 1):
-                        # Calentamiento / Copia de datos
-                        arr_copia = datos_base.copy()
-                        
-                        t0 = time.perf_counter()
-                        _, comps = funcion_algo(arr_copia, k_val)
-                        t1 = time.perf_counter()
-                        
-                        tiempo_ms = (t1 - t0) * 1000.0  # Convertir a milisegundos
-                        
-                        filas.append({
-                            "id_ejecucion": id_ejecucion,
-                            "integrantes": INTEGRANTES,
-                            "algoritmo": nombre_algo,
-                            "n": n,
-                            "tipo_datos": dist,
-                            "k_etiqueta": k_nombre,
-                            "k_valor": k_val,
-                            "repeticion": rep,
-                            "tiempo_ms": tiempo_ms,
-                            "comparaciones": comps,
-                            "orden_teorico": orden_teorico
-                        })
-                        id_ejecucion += 1
 
-    df = pd.DataFrame(filas)
-    
-    # Nombre del CSV incluyendo a ambos integrantes
-    nombre_csv = "datos_experimentales_AlcayagaLucas_AyalaLorena.csv"
-    df.to_csv(nombre_csv, index=False)
-    print(f"\n Experimento completado con éxito. Datos guardados en: {nombre_csv}")
+def demostracion_peor_caso(salida="demostracion_pivote_inicial.csv"):
+    """Experimento complementario acotado de Quickselect con primer pivote."""
+    filas = []
+    for n in [1000, 2000, 5000]:
+        for dist in ["Ordenado Ascendente", "Ordenado Descendente"]:
+            datos = generar_datos(n, dist, 42)
+            for etiqueta, k in obtener_ks(n).items():
+                esperado = sorted(datos)[k - 1]
+                for rep in range(1, 4):
+                    ini = time.perf_counter()
+                    resultado, comps = quickselect(datos, k, estrategia_pivote="primero")
+                    ms = (time.perf_counter() - ini) * 1000
+                    if resultado != esperado:
+                        raise AssertionError("Fallo de validación en demostración de peor caso")
+                    filas.append({"n": n, "tipo_datos": dist, "k_etiqueta": etiqueta,
+                                  "repeticion": rep, "tiempo_ms": ms, "comparaciones": comps,
+                                  "estrategia_pivote": "primero"})
+    pd.DataFrame(filas).to_csv(salida, index=False)
+    print(f"Prueba complementaria guardada: {salida}")
 
 
 if __name__ == "__main__":
-    ejecutar_experimentos()
+    parser = argparse.ArgumentParser(description="Experimento de selección RA2")
+    parser.add_argument("--rapido", action="store_true", help="Prueba reducida para verificar funcionamiento (no apta para informe)")
+    parser.add_argument("--peor-caso", action="store_true", help="Ensayo complementario con pivote inicial")
+    args = parser.parse_args()
+    if args.peor_caso:
+        demostracion_peor_caso()
+    elif args.rapido:
+        ejecutar_experimentos([1000, 10000], 2, "prueba_rapida.csv")
+    else:
+        ejecutar_experimentos()
