@@ -57,5 +57,3 @@ La opción principal con pivote aleatorio no tiene por qué mostrar un deterioro
 - `datos_experimentales_AlcayagaLucas_AyalaLorena.csv`: **se genera al ejecutar el protocolo completo**, no se incluye una versión antigua como si fuera válida.
 - `resumen_estadistico_AlcayagaLucas_AyalaLorena.csv`: se genera con `graficar.py`.
 - `resultados_originales/`: archivos CSV y PNG obtenidos con el código **anterior**; son **históricos y no válidos para comparar** con las mediciones corregidas. Deben reemplazarse al completar las nuevas pruebas.
-
-## Informe 
